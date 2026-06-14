@@ -1,0 +1,16 @@
+[Unit]
+Description=Starlight HiFi now-playing dashboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__USER__
+WorkingDirectory=__DIR__
+Environment=DISPLAY=:0
+ExecStart=__DIR__/venv/bin/python __DIR__/app.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

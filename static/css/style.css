@@ -1,0 +1,171 @@
+/* Starlight HiFi - minimal dark now-playing display.
+   The album art is the hero; one colour pulled from the cover is the only
+   accent. Everything else stays quiet: near-black ground, generous space,
+   a clear type hierarchy, and figures that don't jiggle as the clock ticks. */
+
+@font-face {
+  font-family: "Inter";
+  src: url("../fonts/inter.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+:root {
+  --bg: #0b0b0d;
+  --title: #f2f2f3;
+  --muted: #76797f;
+  --accent: #9aa0a6;                 /* overwritten per-track from the cover */
+  --track: rgba(255, 255, 255, 0.10);
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  width: 100%;
+  height: 100%;
+  background: var(--bg);
+  color: var(--title);
+  overflow: hidden;
+  cursor: none;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+#stage {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.view {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hidden { display: none !important; }
+
+/* --- now playing: horizontal split --------------------------------- */
+
+#nowplaying {
+  gap: clamp(32px, 6vw, 104px);
+  padding: clamp(32px, 6vw, 104px);
+}
+
+.artwrap {
+  flex: 0 0 auto;
+  width: min(44vw, 66vh);
+  height: min(44vw, 66vh);
+  border-radius: 14px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: 0 26px 64px rgba(0, 0, 0, 0.55);
+}
+
+.artwrap.noart { box-shadow: none; }
+
+.artwrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.meta {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 46vw;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.title {
+  font-size: clamp(30px, 4.1vw, 60px);
+  font-weight: 600;
+  letter-spacing: -0.021em;
+  line-height: 1.07;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+.artist {
+  margin-top: clamp(12px, 1.5vw, 22px);
+  font-size: clamp(18px, 2.15vw, 31px);
+  font-weight: 500;
+  color: var(--accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.album {
+  margin-top: 6px;
+  font-size: clamp(14px, 1.4vw, 21px);
+  font-weight: 400;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.progress {
+  margin-top: clamp(24px, 3.2vw, 48px);
+  width: min(100%, 540px);
+}
+
+.is-paused .progress { opacity: 0.45; }
+
+.bar {
+  height: 4px;
+  width: 100%;
+  background: var(--track);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.fill {
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  border-radius: 4px;
+  transition: width 0.25s linear;
+}
+
+.times {
+  margin-top: 11px;
+  display: flex;
+  justify-content: space-between;
+  font-size: clamp(12px, 1vw, 15px);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- idle / offline ------------------------------------------------- */
+
+.idle-text {
+  font-size: clamp(18px, 2vw, 27px);
+  font-weight: 400;
+  color: var(--muted);
+  letter-spacing: 0.01em;
+}
+
+/* --- portrait / square fallback ------------------------------------- */
+
+@media (max-aspect-ratio: 1 / 1) {
+  #nowplaying { flex-direction: column; text-align: center; }
+  .meta { align-items: center; max-width: 86vw; }
+  .artist, .album { white-space: normal; }
+  .progress { margin-left: auto; margin-right: auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fill { transition: none; }
+}

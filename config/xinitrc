@@ -1,0 +1,52 @@
+#!/bin/sh
+# ~/.xinitrc - X session for the Starlight HiFi kiosk.
+# Started by `startx` from the console autologin (see SETUP.md).
+
+# Screensaver off; keep DPMS enabled but disable its auto-timeouts, so the
+# *only* thing that powers the panel down is the dashboard's explicit
+# `xset dpms force off`.
+xset s off
+xset s noblank
+xset +dpms
+xset dpms 0 0 0
+
+# Let the dashboard service (running as this same user) drive xset on :0.
+xhost +SI:localuser:"$(whoami)" >/dev/null 2>&1
+
+# A minimal window manager just to give Chromium a clean fullscreen surface.
+openbox &
+
+# Use whichever Chromium binary the image provides.
+if command -v chromium-browser >/dev/null 2>&1; then
+  CHROME=chromium-browser
+else
+  CHROME=chromium
+fi
+
+# Must match DASHBOARD_PORT in .env.
+URL="http://localhost:8080"
+PREF="$HOME/.config/chromium/Default/Preferences"
+
+# Keep Chromium alive: if it ever exits, restart it without tearing down X.
+while true; do
+  # Clear "didn't shut down cleanly" flags so a power cut doesn't leave a
+  # restore-session bar across the screen.
+  if [ -f "$PREF" ]; then
+    sed -i 's/"exit_type":"[^"]*"/"exit_type":"Normal"/; s/"exited_cleanly":false/"exited_cleanly":true/' "$PREF" 2>/dev/null || true
+  fi
+
+  "$CHROME" \
+    --kiosk \
+    --noerrdialogs \
+    --disable-infobars \
+    --disable-session-crashed-bubble \
+    --disable-features=TranslateUI \
+    --no-first-run \
+    --check-for-update-interval=604800 \
+    --overscroll-history-navigation=0 \
+    --disk-cache-dir=/tmp/chromium-cache \
+    --disk-cache-size=8388608 \
+    "$URL" >/dev/null 2>&1
+
+  sleep 2
+done

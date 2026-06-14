@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Starlight HiFi</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <main id="stage">
+    <!-- something is playing -->
+    <section id="nowplaying" class="view hidden">
+      <div id="artwrap" class="artwrap">
+        <img id="art" alt="">
+      </div>
+      <div class="meta">
+        <h1 id="title" class="title"></h1>
+        <p id="artist" class="artist"></p>
+        <p id="album" class="album"></p>
+        <div id="progress" class="progress hidden">
+          <div class="bar"><div id="fill" class="fill"></div></div>
+          <div class="times">
+            <span id="elapsed">0:00</span>
+            <span id="total">0:00</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- connected, but nothing playing -->
+    <section id="idle" class="view hidden">
+      <p class="idle-text">Nothing playing</p>
+    </section>
+
+    <!-- can't reach Home Assistant -->
+    <section id="offline" class="view hidden">
+      <p class="idle-text">Reconnecting&#8230;</p>
+    </section>
+  </main>
+
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
