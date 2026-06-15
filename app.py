@@ -6,15 +6,17 @@ Reads a single Home Assistant ``media_player`` entity and serves a full-screen
 Assistant once a second and caches the result, so the browser only ever talks
 to local Flask - if Home Assistant blips, the next poll recovers on its own.
 
-The same thread manages the monitor's power: it wakes the screen when music
-plays and, after a grace period of nothing playing, drops the HDMI signal via
-DPMS so the panel falls into backlight-off standby.
+The same thread manages the screen's power: it wakes the display when something
+plays and, after a grace period of nothing playing, powers it down. The
+mechanism is configurable (SCREEN_CONTROL) - `xset` DPMS for X11/KMS, the Pi's
+`vcgencmd display_power` for the legacy framebuffer, or any custom command pair.
 """
 import colorsys
 import hashlib
 import io
 import logging
 import os
+import shlex
 import shutil
 import subprocess
 import threading
@@ -39,11 +41,14 @@ def _env_bool(name, default):
 class Config:
     base_url = os.environ.get("HA_BASE_URL", "").rstrip("/")
     token = os.environ.get("HA_TOKEN", "")
-    entity_id = os.environ.get("HA_ENTITY_ID", "media_player.starlight_hifi")
+    entity_id = os.environ.get("HA_ENTITY_ID", "media_player.living_room")
     port = int(os.environ.get("DASHBOARD_PORT", "8080"))
     poll_interval = float(os.environ.get("POLL_INTERVAL", "1.0"))
     screen_sleep = _env_bool("SCREEN_SLEEP_ENABLED", True)
     screen_grace = float(os.environ.get("SCREEN_SLEEP_GRACE", "60"))
+    screen_control = os.environ.get("SCREEN_CONTROL", "xset").strip().lower()
+    screen_on_cmd = os.environ.get("SCREEN_ON_CMD", "")
+    screen_off_cmd = os.environ.get("SCREEN_OFF_CMD", "")
     display = os.environ.get("DISPLAY", ":0")
 
 
@@ -118,6 +123,28 @@ def dominant_accent(img):
         return DEFAULT_ACCENT
 
 
+def resolve_screen_commands(mode, on_cmd_str, off_cmd_str):
+    """Return (on_command, off_command) as argv lists for the chosen mechanism.
+
+    - ``xset``     : X11 / KMS DPMS (the default).
+    - ``vcgencmd`` : the Pi firmware's HDMI power, for the legacy framebuffer
+                     driver where DPMS only blanks to black without sleeping.
+    - ``command``  : whatever SCREEN_ON_CMD / SCREEN_OFF_CMD contain.
+
+    Anything else returns empty lists, which disables screen control.
+    """
+    mode = (mode or "xset").strip().lower()
+    if mode == "xset":
+        return (["xset", "dpms", "force", "on"],
+                ["xset", "dpms", "force", "off"])
+    if mode == "vcgencmd":
+        return (["vcgencmd", "display_power", "1"],
+                ["vcgencmd", "display_power", "0"])
+    if mode == "command":
+        return (shlex.split(on_cmd_str or ""), shlex.split(off_cmd_str or ""))
+    return ([], [])
+
+
 # --- background poller ---------------------------------------------------
 
 class Poller(threading.Thread):
@@ -135,7 +162,22 @@ class Poller(threading.Thread):
             self._session.headers["Authorization"] = f"Bearer {config.token}"
         self._screen_on = None                 # None = unknown until first action
         self._last_active = time.monotonic()
-        self._have_xset = shutil.which("xset") is not None
+        self._on_cmd, self._off_cmd = resolve_screen_commands(
+            config.screen_control, config.screen_on_cmd, config.screen_off_cmd)
+        self._screen_ok = self._check_screen_tooling()
+
+    def _check_screen_tooling(self):
+        if not self.cfg.screen_sleep:
+            return False
+        if not self._on_cmd or not self._off_cmd:
+            log.warning("screen control off: no command for SCREEN_CONTROL=%r",
+                        self.cfg.screen_control)
+            return False
+        binary = self._off_cmd[0]
+        if shutil.which(binary) is None:
+            log.warning("screen control off: %r not found on PATH", binary)
+            return False
+        return True
 
     # -- read side (used by the web routes) ------------------------------
     def snapshot(self):
@@ -225,7 +267,7 @@ class Poller(threading.Thread):
                 self._art_bytes, self._art_token, self._accent = None, None, DEFAULT_ACCENT
 
     def _manage_screen(self):
-        if not self.cfg.screen_sleep or not self._have_xset:
+        if not self._screen_ok:
             return
         playing = self.snapshot().get("playing")
         if playing:
@@ -236,19 +278,20 @@ class Poller(threading.Thread):
                 self._set_screen(False)
 
     def _set_screen(self, on):
+        cmd = self._on_cmd if on else self._off_cmd
         action = "on" if on else "off"
         try:
             subprocess.run(
-                ["xset", "dpms", "force", action],
+                cmd,
                 env=dict(os.environ, DISPLAY=self.cfg.display),
                 check=True, timeout=5,
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             )
             self._screen_on = on
-            log.info("screen %s", action)
+            log.info("screen %s (%s)", action, cmd[0])
         except Exception as exc:
-            # X may not be up yet during early boot; we'll try again next cycle
-            log.debug("xset %s failed: %s", action, exc)
+            # the display tool may not be ready yet during early boot; retry next cycle
+            log.debug("screen %s command failed: %s", action, exc)
 
 
 poller = Poller(cfg)

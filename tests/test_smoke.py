@@ -67,3 +67,20 @@ def test_routes():
 def test_art_returns_204_when_absent():
     appmod.poller._art_bytes = None
     assert appmod.app.test_client().get("/art").status_code == 204
+
+
+def test_resolve_screen_commands():
+    on, off = appmod.resolve_screen_commands("xset", "", "")
+    assert off == ["xset", "dpms", "force", "off"]
+
+    on, off = appmod.resolve_screen_commands("vcgencmd", "", "")
+    assert on == ["vcgencmd", "display_power", "1"]
+    assert off == ["vcgencmd", "display_power", "0"]
+
+    on, off = appmod.resolve_screen_commands(
+        "command", "tplink on living", "tplink off living")
+    assert on == ["tplink", "on", "living"]
+    assert off == ["tplink", "off", "living"]
+
+    # unknown mode disables control (empty argv lists)
+    assert appmod.resolve_screen_commands("nonsense", "", "") == ([], [])
